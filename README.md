@@ -48,7 +48,7 @@ Text to multiview:
   <img src="assets/text2multiview.jpg" alt="Text to multiview image" width="800">
 </p>
 
-### 4. Condition-to-Image and vice versatile
+### 4. Condition-to-Image and vice versa
 <p align="center">
   <img src="assets/cond_and_image.jpg" alt="Condition and Image" width="800">
 </p>
