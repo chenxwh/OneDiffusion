@@ -14,33 +14,43 @@ This is official repo of OneDiffusion, a versatile, large-scale diffusion model 
 
 ## Qualitative Results
 
-### 1. ID customization
-
+### 1. Text-to-Image
 <p align="center">
-  <img src="assets/onediffusion_appendix_faceid.jpg" alt="Teaser Image" width="800">
+  <img src="assets/text2image.jpg" alt="Text-to-Image results" width="800">
 </p>
 
 
+### 2. ID customization
+
 <p align="center">
-  <img src="assets/onediffusion_appendix_faceid_3.jpg" alt="Teaser Image" width="800">
+  <img src="assets/onediffusion_appendix_faceid.jpg" alt="ID customization" width="800">
 </p>
 
-###  2. Multiview generation
+<p align="center">
+  <img src="assets/onediffusion_appendix_faceid_3.jpg" alt="ID customization non-human subject" width="800">
+</p>
+
+### 3. Multiview generation
 
 Single image to multiview:
 
 <p align="center">
-  <img src="assets/onediffusion_appendix_multiview.jpg" alt="Teaser Image" width="800">
+  <img src="assets/onediffusion_appendix_multiview.jpg" alt="Image to multiview" width="800">
 </p>
 
 <p align="center">
-  <img src="assets/onediffusion_appendix_multiview_2.jpg" alt="Teaser Image" width="800">
+  <img src="assets/onediffusion_appendix_multiview_2.jpg" alt="image to multiview" width="800">
 </p>
 
 Text to multiview:
 
 <p align="center">
-  <img src="assets/onediffusion_appendix_text2multiview.pdf" alt="Teaser Image" width="800">
+  <img src="assets/text2multiview.jpg" alt="Text to multiview image" width="800">
+</p>
+
+### 4. Condition-to-Image and vice versatile
+<p align="center">
+  <img src="assets/cond_and_image.jpg" alt="Condition and Image" width="800">
 </p>
 
 
