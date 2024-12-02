@@ -55,7 +55,7 @@ Text to multiview:
 
 ### 5. Subject-driven generation
 
-We finetuned the model on [[Subject-200K]](https://huggingface.co/datasets/Yuanshi/Subjects200K) dataset.
+**Update**: We finetuned the model on [[Subject-200K]](https://huggingface.co/datasets/Yuanshi/Subjects200K) dataset (along with all other tasks) for additional 40k steps. The model is now capable of  subject-driven generation.
 
 <p align="center">
   <img src="assets/subject_driven.jpg" alt="Subject driven generation" width="800">
