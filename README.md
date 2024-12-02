@@ -1,7 +1,7 @@
 # OneDiffusion
 
 [![HuggingFace](https://img.shields.io/badge/HuggingFace-Model-orange)]()
-[![Homepage](https://img.shields.io/badge/Homepage-Online-blue)]()
+[![Homepage](https://img.shields.io/badge/Homepage-Offline-gray)]()
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-red)](https://arxiv.org/pdf/2411.16318)
 
 <p align="center">
@@ -53,6 +53,13 @@ Text to multiview:
   <img src="assets/cond_and_image.jpg" alt="Condition and Image" width="800">
 </p>
 
+### 5. Subject-driven generation
+
+We finetuned the model on [[Subject-200K]](https://huggingface.co/datasets/Yuanshi/Subjects200K) dataset.
+
+<p align="center">
+  <img src="assets/subject_driven.jpg" alt="Subject driven generation" width="800">
+</p>
 
 ## Citation
 
