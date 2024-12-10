@@ -1,16 +1,77 @@
-# OneDiffusion
+# One Diffusion to Generate Them All
 
-[![HuggingFace](https://img.shields.io/badge/HuggingFace-Model-orange)]()
-[![Homepage](https://img.shields.io/badge/Homepage-Offline-gray)]()
-[![arXiv](https://img.shields.io/badge/arXiv-Paper-red)](https://arxiv.org/pdf/2411.16318)
+<p align="left">
+    <a href="https://lehduong.github.io/OneDiffusion-homepage/">
+        <img alt="Build" src="https://img.shields.io/badge/Project%20Page-OneDiffusion-yellow">
+    </a>
+    <a href="https://arxiv.org/abs/2411.16318">
+            <img alt="Build" src="https://img.shields.io/badge/arXiv%20paper-2411.16318-b31b1b.svg">
+    </a>
+    <a href="https://huggingface.co/spaces/lehduong/OneDiffusion">
+        <img alt="License" src="https://img.shields.io/badge/HF%20Demo-🤗-lightblue">
+    </a>
+    <a href="https://huggingface.co/lehduong/OneDiffusion">
+        <img alt="Build" src="https://img.shields.io/badge/HF%20Model-🤗-yellow">
+    </a>    
+</p>
+
+<h4 align="left">
+    <p>
+        <a href=#news>News</a> |
+        <a href=#quick-start>Quick start</a> |
+        <a href=https://github.com/lehduong/OneDiffusion/blob/main/PROMPT_GUIDE.md>Prompt guide &  Supported tasks </a> |
+        <a href=#qualitative-results>Qualitative results</a> |
+        <a href="#license">License</a> |
+        <a href="#citation">Citation</a>
+    <p>
+</h4>
+
 
 <p align="center">
   <img src="assets/teaser.png" alt="Teaser Image" width="800">
 </p>
 
-## Introduction
 
-This is official repo of OneDiffusion, a versatile, large-scale diffusion model that seamlessly supports bidirectional image synthesis and understanding across diverse tasks. We will release the code and checkpoints in early December.
+This is official repo of OneDiffusion, a versatile, large-scale diffusion model that seamlessly supports bidirectional image synthesis and understanding across diverse tasks. 
+
+## News
+- 📦 2024/12/10: Released weight.
+- 📝 2024/12/06: Added image editing from instruction.
+- ✨ 2024/12/02: Added subject-driven generation
+
+## Installation
+```
+conda create -n onediffusion_env python=3.8 &&
+conda activate onediffusion_env &&
+pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cu118 &&
+pip install "git+https://github.com/facebookresearch/pytorch3d.git" &&
+pip install -r requirements.txt
+```
+
+## Quick start
+
+Check `inference.py` for more detailed. For text-to-image, you can use below code snipe.
+
+```
+import torch
+from onediffusion.diffusion.pipelines.onediffusion import OneDiffusionPipeline
+
+device = torch.device('cuda:0')
+
+pipeline = OneDiffusionPipeline.from_pretrained("lehduong/OneDiffusion").to(device=device, dtype=torch.bfloat16)
+
+NEGATIVE_PROMPT = "monochrome, greyscale, low-res, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name, poorly drawn, bad anatomy, wrong anatomy, extra limb, missing limb, floating limbs, disconnected limbs, mutation, mutated, ugly, disgusting, blurry, amputation"
+
+output = pipeline(
+    prompt="A bipedal black cat wearing a huge oversized witch hat, a wizards robe, casting a spell,in an enchanted forest. The scene is filled with fireflies and moss on surrounding rocks and trees,in the style of ck-ncr", 
+    negative_prompt=NEGATIVE_PROMPT, 
+    num_inference_steps=50,
+    guidance_scale=4,
+    height=1024, 
+    width=1024,
+)
+output.images[0].save('text2image_output.jpg')
+```
 
 ## Qualitative Results
 
@@ -55,11 +116,32 @@ Text to multiview:
 
 ### 5. Subject-driven generation
 
-**Update**: We finetuned the model on [[Subject-200K]](https://huggingface.co/datasets/Yuanshi/Subjects200K) dataset (along with all other tasks) for additional 40k steps. The model is now capable of  subject-driven generation.
+We finetuned the model on [Subject-200K](https://huggingface.co/datasets/Yuanshi/Subjects200K) dataset (along with all other tasks) for additional 40k steps. The model is now capable of  subject-driven generation.
 
 <p align="center">
   <img src="assets/subject_driven.jpg" alt="Subject driven generation" width="800">
 </p>
+
+### 6. Text-guide image editing
+
+We finetuned the model on [OmniEdit](https://huggingface.co/datasets/TIGER-Lab/OmniEdit-Filtered-1.2M) dataset for additional 30K steps.
+
+<p align="center">
+  <img src="assets/onediffusion_editing.jpg" alt="Text-guide editing" width="800">
+</p>
+
+### 7. Zero-shot Task combinations
+
+We found that the model can handle multiple tasks in a zero-shot setting by combining condition images and task tokens without any fine-tuning, as shown in the examples below. However, its performance on these combined tasks might not be robust, and the model’s behavior may change if the order of task tokens or captions is altered. For example, when using both image inpainting and ID customization together, the target prompt and the caption of the masked image must be identical. If you plan to use such combinations, we recommend fine-tuning the model on these tasks to achieve better performance and simpler usage.
+
+
+<p align="center">
+  <img src="assets/onediffusion_zeroshot.jpg" alt="Subject driven generation" width="800">
+</p>
+
+## License
+
+The model is trained on several non-commercially licensed datasets (e.g., DL3DV, Unsplash), thus, **model weights** are released under a CC BY-NC license as described in [LICENSE](https://github.com/lehduong/onediffusion/blob/main/LICENSE). 
 
 ## Citation
 
@@ -74,5 +156,3 @@ Text to multiview:
       url={https://arxiv.org/abs/2411.16318}, 
 }
 ```
-
-## Acknowledgements
