@@ -9,7 +9,7 @@ NEGATIVE_PROMPT = "monochrome, greyscale, low-res, bad anatomy, bad hands, text,
 
 ## Text-to-image
 output = pipeline(
-    prompt="A bipedal black cat wearing a huge oversized witch hat, a wizards robe, casting a spell,in an enchanted forest. The scene is filled with fireflies and moss on surrounding rocks and trees", 
+    prompt="[[text2image]] A bipedal black cat wearing a huge oversized witch hat, a wizards robe, casting a spell,in an enchanted forest. The scene is filled with fireflies and moss on surrounding rocks and trees", 
     negative_prompt=NEGATIVE_PROMPT, 
     num_inference_steps=50,
     guidance_scale=4,

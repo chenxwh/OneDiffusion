@@ -63,7 +63,7 @@ pipeline = OneDiffusionPipeline.from_pretrained("lehduong/OneDiffusion").to(devi
 NEGATIVE_PROMPT = "monochrome, greyscale, low-res, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name, poorly drawn, bad anatomy, wrong anatomy, extra limb, missing limb, floating limbs, disconnected limbs, mutation, mutated, ugly, disgusting, blurry, amputation"
 
 output = pipeline(
-    prompt="A bipedal black cat wearing a huge oversized witch hat, a wizards robe, casting a spell,in an enchanted forest. The scene is filled with fireflies and moss on surrounding rocks and trees", 
+    prompt="[[text2image]] A bipedal black cat wearing a huge oversized witch hat, a wizards robe, casting a spell,in an enchanted forest. The scene is filled with fireflies and moss on surrounding rocks and trees", 
     negative_prompt=NEGATIVE_PROMPT, 
     num_inference_steps=50,
     guidance_scale=4,
@@ -72,6 +72,8 @@ output = pipeline(
 )
 output.images[0].save('text2image_output.jpg')
 ```
+
+You can run the gradio demo with `python gradio_demo.py`. The demo provides guidance and helps format the prompt properly for each task. Currently, it loads the Molmo for captioning source images, which significantly increases memory usage. You generally need a GPU with at least 40GB of memory to run the demo. We’ll work on optimizing it.
 
 ## Qualitative Results
 
