@@ -20,9 +20,9 @@ output.images[0].save('text2image_output.jpg')
 
 ## ID Customization
 image = [
-    Image.open("assets/examples/id_customization/image_0.png"), 
-    Image.open("assets/examples/id_customization/image_1.png"), 
-    Image.open("assets/examples/id_customization/image_2.png")
+    Image.open("assets/examples/id_customization/chenhao/image_0.png"), 
+    Image.open("assets/examples/id_customization/chenhao/image_1.png"), 
+    Image.open("assets/examples/id_customization/chenhao/image_2.png")
 ]
 
 # input = [noise, cond_1, cond_2, cond_3]
