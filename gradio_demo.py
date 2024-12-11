@@ -115,13 +115,27 @@ class MolmoCaptionProcessor:
             print(f"Error in process: {str(e)}")
             raise
 
+
+class PlaceHolderCaptionProcessor:
+    def __init__(self):
+        pass
+
+    def generate_response(self, image: Image.Image, msg: str) -> str:
+        return ""
+    
+    def process(self, images: List[Image.Image], msg: str = None) -> List[str]:
+        return [""] * len(images)
+    
+    
 def initialize_models(captioner_name):
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     pipeline = OneDiffusionPipeline.from_pretrained("lehduong/OneDiffusion").to(device=device, dtype=torch.bfloat16)
     if captioner_name == 'molmo':
         captioner = MolmoCaptionProcessor()
-    else:
+    elif captioner_name == 'llava':
         captioner = LlavaCaptionProcessor()
+    else:
+        captioner = PlaceHolderCaptionProcessor()
     return pipeline, captioner
 
 def colorize_depth_maps(
@@ -692,7 +706,7 @@ with gr.Blocks(title="OneDiffusion Demo") as demo:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Start the Gradio demo with specified captioner.')
-    parser.add_argument('--captioner', type=str, choices=['molmo', 'llava'], default='molmo', help='Captioner to use: molmo or llava.')
+    parser.add_argument('--captioner', type=str, choices=['molmo', 'llava', 'disable'], default='molmo', help='Captioner to use: molmo, llava, disable.')
     args = parser.parse_args()
 
     # Initialize models with the specified captioner
