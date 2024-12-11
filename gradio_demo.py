@@ -19,6 +19,7 @@ from typing import List, Optional
 import matplotlib
 import numpy as np
 import cv2
+import argparse
 
 # Task-specific tokens
 TASK2SPECIAL_TOKENS = {
@@ -26,7 +27,6 @@ TASK2SPECIAL_TOKENS = {
     "deblurring": "[[deblurring]]",
     "inpainting": "[[image_inpainting]]",
     "canny": "[[canny2image]]",
-    "super_resolution": "[[super_resolution]]",
     "depth2image": "[[depth2image]]",
     "hed2image": "[[hed2img]]",
     "pose2image": "[[pose2image]]",
@@ -115,11 +115,14 @@ class MolmoCaptionProcessor:
             print(f"Error in process: {str(e)}")
             raise
 
-def initialize_models():
+def initialize_models(captioner_name):
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     pipeline = OneDiffusionPipeline.from_pretrained("lehduong/OneDiffusion").to(device=device, dtype=torch.bfloat16)
-    molmo_caption_processor = MolmoCaptionProcessor() # LlavaCaptionProcessor()
-    return pipeline, molmo_caption_processor
+    if captioner_name == 'molmo':
+        captioner = MolmoCaptionProcessor()
+    else:
+        captioner = LlavaCaptionProcessor()
+    return pipeline, captioner
 
 def colorize_depth_maps(
     depth_map, min_depth, max_depth, cmap="Spectral", valid_mask=None
@@ -190,7 +193,7 @@ def update_prompt(images: List[Image.Image], task_type: str, custom_msg: str = N
     if not images:
         return format_prompt(task_type, []), "Please upload at least one image!"
     try:
-        captions = molmo_processor.process(images, custom_msg)
+        captions = captioner.process(images, custom_msg)
         if not captions:
             return "", "No valid images found!"
         prompt = format_prompt(task_type, captions)
@@ -198,7 +201,7 @@ def update_prompt(images: List[Image.Image], task_type: str, custom_msg: str = N
     except Exception as e:
         return "", f"Error generating captions: {str(e)}"
 
-def generate_image(images: List[Image.Image], prompt: str, negative_prompt: str, num_inference_steps: int, guidance_scale: float, pag_guidance_scale: float, 
+def generate_image(images: List[Image.Image], prompt: str, negative_prompt: str, num_inference_steps: int, guidance_scale: float, 
                    denoise_mask: List[str], task_type: str, azimuth: str, elevation: str, distance: str, focal_length: float,
                    height: int = 1024, width: int = 1024, scale_factor: float = 1.0, scale_watershed: float = 1.0,
                    noise_scale: float = None, progress=gr.Progress()):
@@ -272,7 +275,6 @@ def generate_image(images: List[Image.Image], prompt: str, negative_prompt: str,
                 negative_prompt=negative_prompt, 
                 num_inference_steps=num_inference_steps,
                 guidance_scale=guidance_scale,
-                pag_guidance_scale=pag_guidance_scale,
                 height=height, 
                 width=width,
                 scale_factor=scale_factor,
@@ -380,9 +382,6 @@ def process_images_for_task_type(images_state: List[Image.Image], task_type: str
     # No changes needed here since we are processing the output images
     return images_state, images_state
 
-# Initialize models
-pipeline, molmo_processor = initialize_models()
-
 with gr.Blocks(title="OneDiffusion Demo") as demo:
     gr.Markdown("""
     # OneDiffusion Demo
@@ -467,13 +466,13 @@ with gr.Blocks(title="OneDiffusion Demo") as demo:
                 label="Task Type"
             )
             
-            molmo_message = gr.Textbox(
+            captioning_message = gr.Textbox(
                 lines=2,
                 value="Describe the contents of the photo in 50 words.",
-                label="Custom message for Molmo captioner"
+                label="Custom message for captioner"
             )
             
-            auto_caption_btn = gr.Button("Generate Captions with Molmo")
+            auto_caption_btn = gr.Button("Generate Captions")
 
         with gr.Column():
             prompt = gr.Textbox(
@@ -502,13 +501,6 @@ with gr.Blocks(title="OneDiffusion Demo") as demo:
         value=4,
         step=0.1,
         label="Guidance Scale"
-    )
-    pag_guidance_scale = gr.Slider(
-        minimum=0.1,
-        maximum=10.0,
-        value=1,
-        step=0.1,
-        label="PAG guidance Scale"
     )
     height = gr.Number(value=1024, label="Height")
     width = gr.Number(value=1024, label="Width")
@@ -677,7 +669,7 @@ with gr.Blocks(title="OneDiffusion Demo") as demo:
     generate_btn.click(
         fn=generate_image,
         inputs=[
-            images_state, prompt, negative_prompt, num_steps, guidance_scale, pag_guidance_scale,
+            images_state, prompt, negative_prompt, num_steps, guidance_scale,
             denoise_mask_checkbox, task_type, azimuth, elevation, distance,
             focal_length, height, width, scale_factor, scale_watershed, noise_scale  # Added noise_scale here
         ],
@@ -687,7 +679,7 @@ with gr.Blocks(title="OneDiffusion Demo") as demo:
 
     auto_caption_btn.click(
         fn=update_prompt,
-        inputs=[images_state, task_type, molmo_message],
+        inputs=[images_state, task_type, captioning_message],
         outputs=[prompt, caption_status],
         concurrency_id="gpu_queue"
     )
@@ -699,4 +691,11 @@ with gr.Blocks(title="OneDiffusion Demo") as demo:
     # )
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Start the Gradio demo with specified captioner.')
+    parser.add_argument('--captioner', type=str, choices=['molmo', 'llava'], default='molmo', help='Captioner to use: molmo or llava.')
+    args = parser.parse_args()
+
+    # Initialize models with the specified captioner
+    pipeline, captioner = initialize_models(args.captioner)
+
     demo.launch(share=True)

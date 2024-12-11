@@ -73,7 +73,12 @@ output = pipeline(
 output.images[0].save('text2image_output.jpg')
 ```
 
-You can run the gradio demo with `python gradio_demo.py`. The demo provides guidance and helps format the prompt properly for each task. Currently, it loads the Molmo for captioning source images, which significantly increases memory usage. You generally need a GPU with at least 40GB of memory to run the demo. We’ll work on optimizing it.
+You can run the gradio demo with:
+```
+python gradio_demo.py --captioner molmo # [molmo, llava]
+```
+The demo provides guidance and helps format the prompt properly for each task. By default, it loads the Molmo for captioning source images, which significantly increases memory usage. You generally need a GPU with at least $40$ GB of memory to run the demo.  Opting to use LLaVA can reduce this requirement to about $\approx 27$ GB, though the resulting captions may be less accurate in some cases.
+
 
 ## Qualitative Results
 
