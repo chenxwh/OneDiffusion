@@ -72,7 +72,7 @@ class LlavaCaptionProcessor:
 
 class MolmoCaptionProcessor:
     def __init__(self):
-        pretrained_model_name = 'allenai/Molmo-7B-O-0924'
+        pretrained_model_name = 'cyan2k/molmo-7B-D-bnb-4bit'
         self.processor = AutoProcessor.from_pretrained(
             pretrained_model_name,
             trust_remote_code=True,
@@ -214,6 +214,7 @@ def update_prompt(images: List[Image.Image], task_type: str, custom_msg: str = N
         return prompt, f"Generated {len(captions)} captions successfully!"
     except Exception as e:
         return "", f"Error generating captions: {str(e)}"
+
 
 def generate_image(images: List[Image.Image], prompt: str, negative_prompt: str, num_inference_steps: int, guidance_scale: float, 
                    denoise_mask: List[str], task_type: str, azimuth: str, elevation: str, distance: str, focal_length: float,
@@ -408,7 +409,7 @@ with gr.Blocks(title="OneDiffusion Demo") as demo:
 
     2. **Upload Images**: Drag and drop images directly onto the upload area, or click to select files from your device.
 
-    3. **Generate Captions**: **If you upload any images**, Click the "Generate Captions with Molmo" button to generate descriptive captions for your uploaded images (depend on the task). You can enter a custom message in the "Custom Message for Molmo" textbox e.g., "caption in 30 words" instead of 50 words.
+    3. **Generate Captions**: **If you upload any images**, Click the "Generate Captions" button to generate descriptive captions for your uploaded images (depend on the task). You can enter a custom message in the "Custom Message for captioner" textbox e.g., "caption in 30 words" instead of 50 words.
 
     4. **Configure Generation Settings**: Expand the "Advanced Configuration" section to adjust parameters like the number of inference steps, guidance scale, image size, and more.
 
@@ -482,7 +483,7 @@ with gr.Blocks(title="OneDiffusion Demo") as demo:
             
             captioning_message = gr.Textbox(
                 lines=2,
-                value="Describe the contents of the photo in 50 words.",
+                value="Describe the contents of the photo in 60 words.",
                 label="Custom message for captioner"
             )
             
@@ -712,4 +713,4 @@ if __name__ == "__main__":
     # Initialize models with the specified captioner
     pipeline, captioner = initialize_models(args.captioner)
 
-    demo.launch(share=True)
+    demo.launch(debug=True)

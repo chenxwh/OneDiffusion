@@ -2,13 +2,15 @@ pytest
 matplotlib
 scikit-learn
 scipy
-spacy
 numpy
 einops
 einsum
 fvcore
 h5py
 twine
+sentencepiece
+tensorflow-cpu==2.11.0
+protobuf==3.19.6
 transformers==4.45.2
 huggingface_hub==0.24
 accelerate==0.34.2
