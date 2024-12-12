@@ -34,9 +34,12 @@
 
 This is official repo of OneDiffusion, a versatile, large-scale diffusion model that seamlessly supports bidirectional image synthesis and understanding across diverse tasks. 
 
+**For more detail, read our paper [here](https://arxiv.org/abs/2411.16318).**
+
 ## News
-- 📦 2024/12/10: Released weight.
-- 📝 2024/12/06: Added image editing from instruction.
+- 📦 2024/12/11: [Huggingface space](https://huggingface.co/spaces/lehduong/OneDiffusion) is online.
+- 📦 2024/12/10: Released [weight](https://huggingface.co/lehduong/OneDiffusion) and inference code.
+- ✨ 2024/12/06: Added image editing from instruction.
 - ✨ 2024/12/02: Added subject-driven generation
 
 ## Installation
