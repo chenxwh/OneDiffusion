@@ -27,3 +27,4 @@ gradio
 git+https://github.com/facebookresearch/pytorch3d.git
 opencv-python==4.5.5.64
 opencv-python-headless==4.5.5.64
+bitsandbytes==0.45.0

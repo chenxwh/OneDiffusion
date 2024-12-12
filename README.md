@@ -37,7 +37,7 @@ This is official repo of OneDiffusion, a versatile, large-scale diffusion model 
 **For more detail, read our paper [here](https://arxiv.org/abs/2411.16318).**
 
 ## News
-- 📦 2024/12/11: [Huggingface space](https://huggingface.co/spaces/lehduong/OneDiffusion) is online.
+- 📦 2024/12/11: [Huggingface space](https://huggingface.co/spaces/lehduong/OneDiffusion) is online. Reduce the VRAM requirements for running demo with Molmo to 21GB.
 - 📦 2024/12/10: Released [weight](https://huggingface.co/lehduong/OneDiffusion) and inference code.
 - ✨ 2024/12/06: Added image editing from instruction.
 - ✨ 2024/12/02: Added subject-driven generation
@@ -82,7 +82,7 @@ python gradio_demo.py --captioner molmo # [molmo, llava, disable]
 ```
 The demo provides guidance and helps format the prompt properly for each task. 
 
-- By default, it loads the **quantized** Molmo for captioning source images, which significantly increases memory usage. ~~You generally need a GPU with at least $40$ GB of memory to run the demo.~~ You generally need a GPU with at least $21$ GB of memory to run the demo. 
+- By default, it loads the **quantized** Molmo for captioning source images. ~~which significantly increases memory usage. You generally need a GPU with at least $40$ GB of memory to run the demo.~~ You generally need a GPU with at least $21$ GB of memory to run the demo. 
 
 - Opting to use LLaVA can reduce this requirement to $\approx 27$ GB, though the resulting captions may be less accurate in some cases. 
 
