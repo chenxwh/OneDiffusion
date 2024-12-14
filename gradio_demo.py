@@ -1,3 +1,5 @@
+import os
+import subprocess
 import gradio as gr
 import torch
 import base64
@@ -20,6 +22,15 @@ import matplotlib
 import numpy as np
 import cv2
 import argparse
+from PIL import Image
+
+import csv
+import ast
+from gradio import components, utils
+from typing import List, Any
+from types import MethodType
+
+os.environ["GRADIO_EXAMPLES_CACHE"] = "./assets/gradio_cached_examples"
 
 # Task-specific tokens
 TASK2SPECIAL_TOKENS = {
@@ -56,7 +67,7 @@ class LlavaCaptionProcessor:
         with torch.no_grad():
             prompt = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
             inputs = self.processor(prompt, image, return_tensors="pt").to(self.model.device)
-            output = self.model.generate(**inputs, max_new_tokens=250)
+            output = self.model.generate(**inputs, max_new_tokens=200)
             response = self.processor.decode(output[0], skip_special_tokens=True)
         return response.split(msg)[-1].strip()[len(self.SPECIAL_TOKENS):]
 
@@ -397,313 +408,345 @@ def process_images_for_task_type(images_state: List[Image.Image], task_type: str
     # No changes needed here since we are processing the output images
     return images_state, images_state
 
-with gr.Blocks(title="OneDiffusion Demo") as demo:
-    gr.Markdown("""
-    # OneDiffusion Demo
-
-    **Welcome to the OneDiffusion Demo!**
-
-    This application allows you to generate images based on your input prompts for various tasks. Here's how to use it:
-
-    1. **Select Task Type**: Choose the type of task you want to perform from the "Task Type" dropdown menu.
-
-    2. **Upload Images**: Drag and drop images directly onto the upload area, or click to select files from your device.
-
-    3. **Generate Captions**: **If you upload any images**, Click the "Generate Captions" button to generate descriptive captions for your uploaded images (depend on the task). You can enter a custom message in the "Custom Message for captioner" textbox e.g., "caption in 30 words" instead of 50 words.
-
-    4. **Configure Generation Settings**: Expand the "Advanced Configuration" section to adjust parameters like the number of inference steps, guidance scale, image size, and more.
-
-    5. **Generate Images**: After setting your preferences, click the "Generate Image" button. The generated images will appear in the "Generated Images" gallery.
-
-    6. **Manage Images**: Use the "Delete Selected Images" or "Delete All Images" buttons to remove unwanted images from the gallery.
-
-    **Notes**:
-    - Check out the [Prompt Guide](https://github.com/lehduong/OneDiffusion/blob/main/PROMPT_GUIDE.md).
-    
-    - For text-to-image:
-        + simply enter your prompt in this format "[[text2image]] your/prompt/here" and press the "Generate Image" button.
+def get_example():
+    # Define example configurations and save images to temporary files
+    examples = [
+        [
+            "Text to Image",  # Example name
+            None,  # Preview column
+            [],  # Empty list instead of None for input images
+            "[[text2image]] A bipedal black cat wearing a huge oversized witch hat, a wizards robe, casting a spell,in an enchanted forest. The scene is filled with fireflies and moss on surrounding rocks and trees",
+            NEGATIVE_PROMPT,
+            50,  # num_steps
+            4.0,  # guidance_scale
+            ["image_0"],  # denoise_mask
+            "text2image",  # task_type
+            "0",  # azimuth
+            "0",  # elevation
+            "1.5",  # distance
+            1.3887,  # focal_length
+            1024,  # height
+            1024,  # width
+            1.0,  # scale_factor
+            1.0,  # scale_watershed
+            1.0,  # noise_scale
+        ],
         
-    - For boundingbox2image/semantic2image/inpainting etc tasks:
-        + To perform condition-to-image such as semantic map to image, follow above steps
-        + For image-to-condition e.g., image to depth, change the denoise_mask checkbox before generating images. You must UNCHECK image_0 box and CHECK image_1 box.
+        [
+            "ID Customization with 1 images",  # Example name - new column
+            "./assets/examples/id_customization/chika/image_0.png",  # Preview first image
+            [
+                "./assets/examples/id_customization/chika/image_0.png",
+            ],  # Input image paths
+            "[[faceid]] [[img0]] photo depict a female anime character with pink hair and blue eyes,  sitting in a fine dining restaurant, black dress, smiling open mouth widely [[img1]] The photo depicts an anime-style cartoon character of a young woman with pink hair and blue eyes. She's wearing a black dress with white collar and cuffs, adorned with a red bow at the neckline and a red bow on the chest. A black bow tie decorates her hair. The character is standing in a classroom, with a green chalkboard featuring Asian characters visible behind her. The classroom has a white ceiling with brown trim and a window with a green curtain. The woman has a cheerful expression and appears to be in motion, as her hair is flowing. The overall scene is colorful and vibrant, capturing a moment of everyday life in an anime-inspired setting.",
+            NEGATIVE_PROMPT,
+            75,  # num_steps
+            4.0,  # guidance_scale
+            ["image_0"],  # denoise_mask
+            "faceid",  # task_type
+            "0",  # azimuth
+            "0",  # elevation
+            "1.5",  # distance
+            1.3887,  # focal_length
+            576,  # height
+            448,  # width
+            1.0,  # scale_factor
+            1.0,  # scale_watershed
+            1.0,  # noise_scale
+        ],
         
-    - For FaceID tasks: 
-        + Use 3 or 4 images if single input image does not give satisfactory results.
-        + All images will be resized and center cropped to the input height and width. You should choose height and width so that faces in input images won't be cropped.
-        + Model works best with close-up portrait (input and output) images.
-        + If the model does not conform your text prompt, try using shorter caption for source image(s).
-        + If you have non-human subjects and does not get satisfactory results, try "copying" part of caption of source images where it describes the properties of the subject e.g., a monster with red eyes, sharp teeth, etc.
         
-    - For Multiview generation:
-        + The input camera elevation/azimuth ALWAYS starts with $0$. If you want to generate images of azimuths 30,60,90 and elevations of 10,20,30 (wrt input image), the correct input azimuth is: `0, 30, 60, 90`; input elevation is `0,10,20,30`. The camera distance will be `1.5,1.5,1.5,1.5`
-        + Only support square images (ideally in 512x512 resolution).
-        + Ensure the number of elevations, azimuths, and distances are equal. 
-        + The model generally works well for 2-5 views (include both input and generated images). Since the model is trained with 3 views on 512x512 resolution, you might try scale_factor of [1.1; 1.5] and scale_watershed of [100; 400] for better extrapolation.
-        + For better results:
-            1) try increasing num_inference_steps to 75-100.
-            2) avoid aggressively changes in target camera poses, for example to generate novel views at azimuth of 180, (simultaneously) generate 4 views with azimuth of 45, 90, 135, 180.
-    
-    Enjoy creating images with OneDiffusion!
-    """)
-
-    with gr.Row():
-        with gr.Column():
-            images_state = gr.State([])
-            selected_indices_state = gr.State([])
-            
-            with gr.Row():
-                gallery = gr.Gallery(
-                    label="Input Images",
-                    show_label=True,
-                    columns=2,
-                    rows=2,
-                    height="auto",
-                    object_fit="contain"
-                )
-            
-            # In the UI section, update the file_output component:
-            file_output = gr.File(
-                file_count="multiple",
-                file_types=["image"],
-                label="Drag and drop images here or click to upload",
-                height=100,
-                scale=2,
-                type="filepath"  # Add this parameter
-            )
-            
-            with gr.Row():
-                delete_button = gr.Button("Delete Selected Images")
-                delete_all_button = gr.Button("Delete All Images")
-            
-            task_type = gr.Dropdown(
-                choices=list(TASK2SPECIAL_TOKENS.keys()),
-                value="text2image",
-                label="Task Type"
-            )
-            
-            captioning_message = gr.Textbox(
-                lines=2,
-                value="Describe the contents of the photo in 60 words.",
-                label="Custom message for captioner"
-            )
-            
-            auto_caption_btn = gr.Button("Generate Captions")
-
-        with gr.Column():
-            prompt = gr.Textbox(
-                lines=3,
-                placeholder="Enter your prompt here or use auto-caption...",
-                label="Prompt"
-            )
-            negative_prompt = gr.Textbox(
-                lines=3,
-                value=NEGATIVE_PROMPT,
-                placeholder="Enter negative prompt here...",
-                label="Negative Prompt"
-            )
-            caption_status = gr.Textbox(label="Caption Status")
-            
-    num_steps = gr.Slider(
-        minimum=1,
-        maximum=200,
-        value=50,
-        step=1,
-        label="Number of Inference Steps"
-    )
-    guidance_scale = gr.Slider(
-        minimum=0.1,
-        maximum=10.0,
-        value=4,
-        step=0.1,
-        label="Guidance Scale"
-    )
-    height = gr.Number(value=1024, label="Height")
-    width = gr.Number(value=1024, label="Width")
-    
-    with gr.Accordion("Advanced Configuration", open=False):
-        with gr.Row():
-            denoise_mask_checkbox = gr.CheckboxGroup(
-                label="Denoise Mask",
-                choices=["image_0"],
-                value=["image_0"]
-            )
-            azimuth = gr.Textbox(
-                value="0",
-                label="Azimuths (degrees, comma-separated, 'None' for missing)"
-            )
-            elevation = gr.Textbox(
-                value="0",
-                label="Elevations (degrees, comma-separated, 'None' for missing)"
-            )
-            distance = gr.Textbox(
-                value="1.5",
-                label="Distances (comma-separated, 'None' for missing)"
-            )
-            focal_length = gr.Number(
-                value=1.3887,
-                label="Focal Length of camera for multiview generation"
-            )
-            scale_factor = gr.Number(value=1.0, label="Scale Factor")
-            scale_watershed = gr.Number(value=1.0, label="Scale Watershed")
-            noise_scale = gr.Number(value=1.0, label="Noise Scale")  # Added noise_scale input
-
-    output_images = gr.Gallery(
-        label="Generated Images",
-        show_label=True,
-        columns=4,
-        rows=2,
-        height="auto",
-        object_fit="contain"
-    )
-    
-    with gr.Column():
-        generate_btn = gr.Button("Generate Image")
-        # apply_mask_btn = gr.Button("Apply Mask")
-    
-    status = gr.Textbox(label="Generation Status")
-
-    # Event Handlers
-    def update_gallery(files, images_state):
-        if not files:
-            return images_state, images_state
+        [
+            "ID Customization with multiple input images",  # Example name - new column
+            "./assets/examples/id_customization/chenhao/image_0.png",  # Preview first image
+            [
+                "./assets/examples/id_customization/chenhao/image_0.png",
+                "./assets/examples/id_customization/chenhao/image_1.png",
+                "./assets/examples/id_customization/chenhao/image_2.png",
+            ],  # Input image paths
+            "[[faceid]] [[img0]]  A woman with dark hair styled in an intricate updo, wearing a traditional orange and black outfit with elaborate gold embroidery. She has an elegant, poised expression, standing against a serene outdoor setting with classical architecture [[img1]] A young Asian woman with long dark hair and brown eyes smiles at the camera. She wears a red tank top with white flowers and green leaves. The background is blurred, with white and blue tones visible. The image has a slightly grainy quality. [[img2]] A young Asian woman in traditional attire stands against a brown background. She wears a white dress adorned with purple and green floral patterns. Her hair is styled in a bun, and she holds a small white lace umbrella with a gold handle. The image captures her elegant appearance and cultural dress. [[img3]] A woman in traditional Asian attire stands in front of a blurred building. She wears a green robe with floral designs and a black hat with lace. A man in a red robe and black hat stands behind her. The scene appears to be set in an Asian country.",
+            NEGATIVE_PROMPT,
+            50,  # num_steps
+            4.0,  # guidance_scale
+            ["image_0"],  # denoise_mask
+            "faceid",  # task_type
+            "0",  # azimuth
+            "0",  # elevation
+            "1.5",  # distance
+            1.3887,  # focal_length
+            608,  # height
+            416,  # width
+            1.0,  # scale_factor
+            1.0,  # scale_watershed
+            1.0,  # noise_scale
+        ],
         
-        new_images = []
-        for file in files:
-            try:
-                # Handle both file paths and file objects
-                if isinstance(file, dict):  # For drag and drop files
-                    file = file['path']
-                elif hasattr(file, 'name'):  # For uploaded files
-                    file = file.name
-                    
-                img = Image.open(file).convert('RGB')
-                new_images.append(img)
-            except Exception as e:
-                print(f"Error loading image: {str(e)}")
+        [
+            "Image to Multiview",  # Example name - new column
+            "assets/examples/images/cat_on_table.webp",  # Preview column - no image for text-to-multiview
+            ["assets/examples/images/cat_on_table.webp"],  # No input images
+            "[[multiview]] A cat with orange and white fur sits on a round wooden table. The cat has striking green eyes and a pink nose. Its ears are perked up, and its tail is curled around its body. The background is blurred, showing a white wall, a wooden chair, and a wooden table with a white pot and green plant. A white curtain is visible on the right side. The cat's gaze is directed slightly to the right, and its paws are white. The overall scene creates a cozy, domestic atmosphere with the cat as the central focus.",
+            NEGATIVE_PROMPT,
+            60,  # num_steps 
+            4.0,  # guidance_scale
+            ["image_1", "image_2", "image_3"],  # denoise_mask
+            "multiview",  # task_type
+            "0,20,40,60",  # azimuth - four views
+            "0,0,0,0",  # elevation - different angles
+            "1.5,1.5,1.5,1.5",  # distance
+            1.3887,  # focal_length
+            512,  # height
+            512,  # width
+            1.0,  # scale_factor
+            1.0,  # scale_watershed
+            1.0,  # noise_scale
+        ],
+        
+        [
+            "Semantic to Image",  # Example name - new column
+            "assets/examples/semantic_map/dragon_birds_woman.webp",  # Preview column
+            ["assets/examples/semantic_map/dragon_birds_woman.webp"],  # Input image path
+            "[[semanticmap2image]] <#00ffff Cyan mask: insert/concept/to/segment/here> A woman in a red dress with gold floral patterns stands in a traditional Japanese-style building. She has black hair and wears a gold choker and earrings. Behind her, a large orange and white dragon coils around the structure. Two white birds fly near her. The building features paper windows and a wooden roof with lanterns. The scene blends traditional Japanese architecture with fantastical elements, creating a mystical atmosphere.",
+            NEGATIVE_PROMPT,
+            50,  # num_steps
+            4.0,  # guidance_scale
+            ["image_0"],  # denoise_mask
+            "semanticmap2image",  # task_type
+            "0",  # azimuth
+            "0",  # elevation
+            "1.5",  # distance
+            1.3887,  # focal_length
+            672,  # height
+            384,  # width
+            1.0,  # scale_factor
+            1.0,  # scale_watershed
+            1.0,  # noise_scale
+        ],
+        
+        [
+            "Subject driven generation",  # Example name - new column
+            "./assets/examples/subject_driven/chill_guy.jpg",  # Preview column
+            ["./assets/examples/subject_driven/chill_guy.jpg"],  # Input image path
+            "[[subject_driven]] <item: cartoon dog> [[img0]]  a cartoon character resembling a dog, sitting on a beach. The character has a long, narrow face with a black nose and brown eyes. It's wearing a gray sweatshirt, blue jeans rolled up at the bottom, and red sneakers with white soles. it has a slight smirk on its face [[img1]] The photo features a cartoon character resembling a do. The character has a long, narrow face with a black nose and brown eyes. It's wearing a gray sweatshirt, blue jeans rolled up at the bottom, and red sneakers with white soles. The character's hands are tucked into its pockets, and it has a slight smirk on its face. The background is a solid gray color, and the image has a hand-drawn, slightly blurry quality. The character's head is turned to the left, and its body is facing forward. The overall style is simple and cartoonish, with bold lines and limited shading.",
+            NEGATIVE_PROMPT,
+            70,  # num_steps
+            4.0,  # guidance_scale
+            ["image_0"],  # denoise_mask
+            "subject_driven",  # task_type
+            "0",  # azimuth
+            "0",  # elevation
+            "1.5",  # distance
+            1.3887,  # focal_length
+            512,  # height
+            512,  # width
+            1.0,  # scale_factor
+            1.0,  # scale_watershed
+            1.0,  # noise_scale
+        ],
+        
+        [
+            "Depth to Image",  # Example name - new column
+            "./assets/examples/depth/astronaut.webp",  # Preview column
+            ["./assets/examples/depth/astronaut.webp"],  # Input image path
+            "[[depth2image]] The image depicts a futuristic astronaut standing on a rocky terrain with orange flowers. The astronaut is wearing a yellow suit with a helmet and is equipped with a backpack. The astronaut is looking up at a large, circular, glowing portal in the sky, which is surrounded by a halo of light. The portal is emitting a warm glow and is surrounded by a few butterflies. The sky is dark with stars, and there are distant mountains visible. The overall atmosphere of the image is one of exploration and wonder.",
+            NEGATIVE_PROMPT,
+            50,  # num_steps
+            4.0,  # guidance_scale
+            ["image_0"],  # denoise_mask
+            "depth2image",  # task_type
+            "0",  # azimuth
+            "0",  # elevation
+            "1.5",  # distance
+            1.3887,  # focal_length
+            608,  # height
+            416,  # width
+            1.0,  # scale_factor
+            1.0,  # scale_watershed
+            1.0,  # noise_scale
+        ],
+        
+        [
+            "Image to depth",  # Example name - new column
+            "./assets/examples/images/cat.webp",  # Preview column
+            ["./assets/examples/images/cat.webp"],  # Input image path
+            "[[depth2image]] A kitten sits in a small boat on a rainy lake. The kitten wears a pink sweater and hat with a pom-pom. It has orange and white fur, and its paws are visible. The scene is misty and atmospheric, with trees and mountains in the background.",
+            NEGATIVE_PROMPT,
+            50,  # num_steps
+            4.0,  # guidance_scale
+            ["image_1"],  # denoise_mask
+            "depth2image",  # task_type
+            "0",  # azimuth
+            "0",  # elevation
+            "1.5",  # distance
+            1.3887,  # focal_length
+            512,  # height
+            512,  # width
+            1.0,  # scale_factor
+            1.0,  # scale_watershed
+            1.0,  # noise_scale
+        ],
+        
+        [
+            "Image Editing",  # Example name - new column
+            "assets/examples/image_editing/astronaut.webp",  # Preview column
+            ["assets/examples/image_editing/astronaut.webp"],  # Input image path
+            "[[image_editing]] change it to winter and snowy weather",
+            NEGATIVE_PROMPT,
+            60,  # num_steps
+            3.2,  # guidance_scale
+            ["image_0"],  # denoise_mask
+            "image_editing",  # task_type
+            "0",  # azimuth
+            "0",  # elevation
+            "1.5",  # distance
+            1.3887,  # focal_length
+            512,  # height
+            512,  # width
+            1.0,  # scale_factor
+            1.0,  # scale_watershed
+            1.0,  # noise_scale
+        ],
+        
+        [
+            "Text to Multiview",  # Example name - new column
+            None,  # Preview column - no image for text-to-multiview
+            [],  # No input images
+            "[[multiview]] The 3D scene features a striking black raven perched on a weathered rock in a rugged, mountainous landscape. Its glossy feathers shimmer with iridescent highlights, adding depth and realism. The background reveals a misty valley with rolling hills and a solitary stone cottage, exuding a sense of isolation and mystery. The earthy tones of the terrain, scattered with rocks and tufts of grass, contrast beautifully with the raven's dark plumage. The atmosphere feels serene yet haunting, evoking themes of solitude and nature's quiet power.",
+            NEGATIVE_PROMPT,
+            60,  # num_steps 
+            4.0,  # guidance_scale
+            ["image_0", "image_1", "image_2", "image_3"],  # denoise_mask
+            "multiview",  # task_type
+            "0,30,60,90",  # azimuth - four views
+            "0,10,15,20",  # elevation - different angles
+            "1.5,1.5,1.5,1.5",  # distance
+            1.3887,  # focal_length
+            512,  # height
+            512,  # width
+            1.0,  # scale_factor
+            1.0,  # scale_watershed
+            1.0,  # noise_scale
+        ],
+                
+        [
+            "Inpainting with Black mask",  # Example name - new column
+            "./assets/examples/inpainting/giorno.webp",  # Preview column
+            ["./assets/examples/inpainting/giorno.webp"],  # Input image path
+            "[[image_inpainting]]",
+            NEGATIVE_PROMPT,
+            50,  # num_steps
+            4.0,  # guidance_scale
+            ["image_0"],  # denoise_mask
+            "image_inpainting",  # task_type
+            "0",  # azimuth
+            "0",  # elevation
+            "1.5",  # distance
+            1.3887,  # focal_length
+            416,  # height
+            576,  # width
+            1.0,  # scale_factor
+            1.0,  # scale_watershed
+            1.0,  # noise_scale
+        ],
+    ]
+    return examples
+
+def run_for_examples(example_name, preview_image, image_paths, prompt, negative_prompt, 
+                    num_inference_steps, guidance_scale, denoise_mask, task_type, 
+                    azimuth, elevation, distance, focal_length, height, width, 
+                    scale_factor, scale_watershed, noise_scale):
+    try:
+        # Handle empty image paths or None
+        images_state = []
+        gallery_value = []
+        
+        if image_paths:  # Only process if image_paths is not None and not empty
+            if isinstance(image_paths, list) and len(image_paths) > 0:
+                for path in image_paths:
+                    try:
+                        if path is not None:
+                            img = Image.open(path).convert('RGB')
+                            images_state.append(img)
+                            gallery_value.append(path)
+                    except Exception as e:
+                        print(f"Error loading image {path}: {str(e)}")
+        
+        # Generate output images
+        output_images, status = generate_image(
+            images_state, prompt, negative_prompt, num_inference_steps, guidance_scale,
+            denoise_mask, task_type, azimuth, elevation, distance, focal_length,
+            height, width, scale_factor, scale_watershed, noise_scale
+        )
+        
+        # For preview gallery - show actual loaded images if any
+        preview_images = images_state # if images_state else []
+        
+        return output_images, status, gallery_value, images_state, preview_images
+    
+    except Exception as e:
+        return None, f"Error in example generation: {str(e)}", [], [], []
+
+def update_gallery_state(files, current_state):
+    """Update image state when new files are uploaded or cleared"""
+    # Handle case when files is None or empty
+    if not files:
+        return [], [], []  # Return empty states for images, gallery, and preview
+    
+    # Ensure files is a list
+    if not isinstance(files, list):
+        files = [files]
+        
+    # Process new uploads
+    processed_images = []
+    for file in files:
+        try:
+            if isinstance(file, dict) and "name" in file:  # Handle file dict from gradio
+                img_path = file["name"]
+            elif isinstance(file, str):  # Handle direct file paths
+                img_path = file
+            elif isinstance(file, Image.Image):  # Handle PIL Image objects
+                processed_images.append(file.convert('RGB'))
+                continue
+            else:
+                print(f"Skipping unsupported file type: {type(file)}")
                 continue
                 
-        images_state.extend(new_images)
-        return images_state, images_state
-
-    def on_image_select(evt: gr.SelectData, selected_indices_state):
-        selected_indices = selected_indices_state or []
-        index = evt.index
-        if index in selected_indices:
-            selected_indices.remove(index)
-        else:
-            selected_indices.append(index)
-        return selected_indices
-
-    def delete_images(selected_indices, images_state):
-        updated_images = [img for i, img in enumerate(images_state) if i not in selected_indices]
-        selected_indices_state = []
-        return updated_images, updated_images, selected_indices_state
-
-    def delete_all_images(images_state):
-        updated_images = []
-        selected_indices_state = []
-        return updated_images, updated_images, selected_indices_state
-
-    def update_height_width(images_state):
-        if images_state:
-            closest_ar = get_closest_ratio(
-                height=images_state[0].size[1],
-                width=images_state[0].size[0],
-                ratios=ASPECT_RATIO_512
-            )
-            height_val, width_val = int(closest_ar[0][0]), int(closest_ar[0][1])
-        else:
-            height_val, width_val = 1024, 1024  # Default values
-        return gr.update(value=height_val), gr.update(value=width_val)
-
-    # Connect events
-    file_output.change(
-        fn=update_gallery,
-        inputs=[file_output, images_state],
-        outputs=[images_state, gallery]
-    ).then(
-        fn=update_height_width,
-        inputs=[images_state],
-        outputs=[height, width]
-    ).then(
-        fn=update_denoise_checkboxes,
-        inputs=[images_state, task_type, azimuth, elevation, distance],
-        outputs=[denoise_mask_checkbox]
-    )
-
-    gallery.select(
-        fn=on_image_select,
-        inputs=[selected_indices_state],
-        outputs=[selected_indices_state]
-    )
-
-    delete_button.click(
-        fn=delete_images,
-        inputs=[selected_indices_state, images_state],
-        outputs=[images_state, gallery, selected_indices_state]
-    ).then(
-        fn=update_denoise_checkboxes,
-        inputs=[images_state, task_type, azimuth, elevation, distance],
-        outputs=[denoise_mask_checkbox]
-    )
-
-    delete_all_button.click(
-        fn=delete_all_images,
-        inputs=[images_state],
-        outputs=[images_state, gallery, selected_indices_state]
-    ).then(
-        fn=update_denoise_checkboxes,
-        inputs=[images_state, task_type, azimuth, elevation, distance],
-        outputs=[denoise_mask_checkbox]
-    )
-
-    task_type.change(
-        fn=update_denoise_checkboxes,
-        inputs=[images_state, task_type, azimuth, elevation, distance],
-        outputs=[denoise_mask_checkbox]
-    )
-
-    azimuth.change(
-        fn=update_denoise_checkboxes,
-        inputs=[images_state, task_type, azimuth, elevation, distance],
-        outputs=[denoise_mask_checkbox]
-    )
-
-    elevation.change(
-        fn=update_denoise_checkboxes,
-        inputs=[images_state, task_type, azimuth, elevation, distance],
-        outputs=[denoise_mask_checkbox]
-    )
-
-    distance.change(
-        fn=update_denoise_checkboxes,
-        inputs=[images_state, task_type, azimuth, elevation, distance],
-        outputs=[denoise_mask_checkbox]
-    )
-
-    generate_btn.click(
-        fn=generate_image,
-        inputs=[
-            images_state, prompt, negative_prompt, num_steps, guidance_scale,
-            denoise_mask_checkbox, task_type, azimuth, elevation, distance,
-            focal_length, height, width, scale_factor, scale_watershed, noise_scale  # Added noise_scale here
-        ],
-        outputs=[output_images, status],
-        concurrency_id="gpu_queue"
-    )
-
-    auto_caption_btn.click(
-        fn=update_prompt,
-        inputs=[images_state, task_type, captioning_message],
-        outputs=[prompt, caption_status],
-        concurrency_id="gpu_queue"
-    )
+            img_pil = Image.open(img_path).convert('RGB')
+            processed_images.append(img_pil)
+            
+        except Exception as e:
+            return [], [], []
     
-    # apply_mask_btn.click(
-    #     fn=apply_mask,
-    #     inputs=[images_state],
-    #     outputs=[output_images, status]
-    # )
+    # If no images were successfully processed, return empty states
+    if not processed_images:
+        return [], [], []
+        
+    # Return updated states and preview images
+    # processed_images for the image state
+    # files for the gallery state (original files)
+    # processed_images again for preview
+    return processed_images, files, processed_images
+
+def delete_selected_images(selected_indices, images_state, gallery_state):
+    """Delete selected images from gallery and state"""
+    if not selected_indices or not images_state:
+        return images_state, gallery_state, images_state, []
+    
+    # Create lists of indices to keep
+    keep_indices = [i for i in range(len(images_state)) if i not in selected_indices]
+    
+    # Update image state
+    updated_images = [images_state[i] for i in keep_indices]
+    
+    # Update gallery state if it exists
+    updated_gallery = [gallery_state[i] for i in keep_indices] if gallery_state else []
+    
+    return updated_images, updated_gallery, updated_images, []
+
+def delete_all_images():
+    """Delete all images"""
+    return [], [], [], []
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Start the Gradio demo with specified captioner.')
@@ -713,4 +756,379 @@ if __name__ == "__main__":
     # Initialize models with the specified captioner
     pipeline, captioner = initialize_models(args.captioner)
 
-    demo.launch(debug=True)
+    with gr.Blocks(title="OneDiffusion Demo") as demo:
+        gr.Markdown("""
+        # OneDiffusion Demo with (quantized) Molmo captioner
+
+        **Welcome to the OneDiffusion Demo!**
+
+        This application allows you to generate images based on your input prompts for various tasks. Here's how to use it:
+
+        1. **Select Task Type**: Choose the type of task you want to perform from the "Task Type" dropdown menu.
+
+        2. **Upload Images**: Drag and drop images directly onto the upload area, or click to select files from your device.
+
+        3. **Generate Captions**: **If you upload any images**, Click the "Generate Captions" button to format the text prompt according to chosen task. In this demo, you will **NEED** to provide the caption of each source image manually. We recommend using Molmo for captioning.
+
+        4. **Configure Generation Settings**: Expand the "Advanced Configuration" section to adjust parameters like the number of inference steps, guidance scale, image size, and more.
+
+        5. **Generate Images**: After setting your preferences, click the "Generate Image" button. The generated images will appear in the "Generated Images" gallery.
+
+        6. **Manage Images**: Use the "Delete Selected Images" or "Delete All Images" buttons to remove unwanted images from the gallery.
+
+        **Notes**:
+        - Check out the [Prompt Guide](https://github.com/lehduong/OneDiffusion/blob/main/PROMPT_GUIDE.md).
+        
+        - For text-to-image:
+            + simply enter your prompt in this format "[[text2image]] your/prompt/here" and press the "Generate Image" button.
+            
+        - For boundingbox2image/semantic2image/inpainting etc tasks:
+            + To perform condition-to-image such as semantic map to image, follow above steps
+            + For image-to-condition e.g., image to depth, change the denoise_mask checkbox before generating images. You must UNCHECK image_0 box and CHECK image_1 box. Caption is not required for this task.
+            
+        - For FaceID tasks: 
+            + Use 3 or 4 images if single input image does not give satisfactory results.
+            + All images will be resized and center cropped to the input height and width. You should choose height and width so that faces in input images won't be cropped.
+            + Model works best with close-up portrait (input and output) images.
+            + If the model does not conform your text prompt, try using shorter caption for source image(s).
+            + If you have non-human subjects and does not get satisfactory results, try "copying" part of caption of source images where it describes the properties of the subject e.g., a monster with red eyes, sharp teeth, etc.
+            
+        - For Multiview generation:
+            + The input camera elevation/azimuth ALWAYS starts with 0. If you want to generate images of azimuths 30,60,90 and elevations of 10,20,30 (wrt input image), the correct input azimuth is: `0, 30, 60, 90`; input elevation is `0,10,20,30`. The camera distance will be `1.5,1.5,1.5,1.5`
+            + Only support square images (ideally in 512x512 resolution).
+            + Ensure the number of elevations, azimuths, and distances are equal. 
+            + The model generally works well for 2-5 views (include both input and generated images). Since the model is trained with 3 views on 512x512 resolution, you might try scale_factor of [1.1; 1.5] and scale_watershed of [100; 400] for better extrapolation.
+            + For better results:
+                1) try increasing num_inference_steps to 75-100.
+                2) avoid aggressively changes in target camera poses, for example to generate novel views at azimuth of 180, (simultaneously) generate 4 views with azimuth of 45, 90, 135, 180.
+        
+        Enjoy creating images with OneDiffusion!
+        """)
+
+        with gr.Row():
+            with gr.Column():
+                images_state = gr.State([])
+                selected_indices_state = gr.State([])
+                
+                with gr.Row():
+                    # Replace gallery with File input
+                    gallery = gr.File(
+                        label="Input Images",
+                        file_count="multiple",
+                        type="filepath",
+                        file_types=["image"]
+                    )
+                
+                # Add preview gallery
+                preview_gallery = gr.Gallery(
+                    label="Image Preview",
+                    show_label=True,
+                    columns=2,
+                    rows=2,
+                    height="auto",
+                    object_fit="contain"
+                )
+
+                with gr.Row():
+                    delete_button = gr.Button("Delete Selected Images")
+                    delete_all_button = gr.Button("Delete All Images")
+                
+                task_type = gr.Dropdown(
+                    choices=list(TASK2SPECIAL_TOKENS.keys()),
+                    value="text2image",
+                    label="Task Type"
+                )
+                
+                captioning_message = gr.Textbox(
+                    lines=2,
+                    value="Describe the contents of the photo in 60 words.",
+                    label="Custom message for captioner"
+                )
+                
+                auto_caption_btn = gr.Button("Generate Captions")
+
+            with gr.Column():
+                prompt = gr.Textbox(
+                    lines=3,
+                    placeholder="Enter your prompt here or use auto-caption...",
+                    label="Prompt"
+                )
+                negative_prompt = gr.Textbox(
+                    lines=3,
+                    value=NEGATIVE_PROMPT,
+                    placeholder="Enter negative prompt here...",
+                    label="Negative Prompt"
+                )
+                caption_status = gr.Textbox(label="Caption Status")
+                
+        num_steps = gr.Slider(
+            minimum=1,
+            maximum=200,
+            value=50,
+            step=1,
+            label="Number of Inference Steps"
+        )
+        guidance_scale = gr.Slider(
+            minimum=0.1,
+            maximum=10.0,
+            value=4,
+            step=0.1,
+            label="Guidance Scale"
+        )
+        height = gr.Number(value=1024, label="Height")
+        width = gr.Number(value=1024, label="Width")
+        
+        with gr.Accordion("Advanced Configuration", open=False):
+            with gr.Row():
+                denoise_mask_checkbox = gr.CheckboxGroup(
+                    label="Denoise Mask",
+                    choices=["image_0"],
+                    value=["image_0"]
+                )
+                azimuth = gr.Textbox(
+                    value="0",
+                    label="Azimuths (degrees, comma-separated, 'None' for missing)"
+                )
+                elevation = gr.Textbox(
+                    value="0",
+                    label="Elevations (degrees, comma-separated, 'None' for missing)"
+                )
+                distance = gr.Textbox(
+                    value="1.5",
+                    label="Distances (comma-separated, 'None' for missing)"
+                )
+                focal_length = gr.Number(
+                    value=1.3887,
+                    label="Focal Length of camera for multiview generation"
+                )
+                scale_factor = gr.Number(value=1.0, label="Scale Factor")
+                scale_watershed = gr.Number(value=1.0, label="Scale Watershed")
+                noise_scale = gr.Number(value=1.0, label="Noise Scale")  # Added noise_scale input
+
+        output_images = gr.Gallery(
+            label="Generated Images",
+            show_label=True,
+            columns=4,
+            rows=2,
+            height="auto",
+            object_fit="contain"
+        )
+        
+        with gr.Column():
+            generate_btn = gr.Button("Generate Image")
+            # apply_mask_btn = gr.Button("Apply Mask")
+        
+        status = gr.Textbox(label="Generation Status")
+
+        def update_height_width(images_state):
+            if images_state:
+                closest_ar = get_closest_ratio(
+                    height=images_state[0].size[1],
+                    width=images_state[0].size[0],
+                    ratios=ASPECT_RATIO_512
+                )
+                height_val, width_val = int(closest_ar[0][0]), int(closest_ar[0][1])
+            else:
+                height_val, width_val = 1024, 1024  # Default values
+            return gr.update(value=height_val), gr.update(value=width_val)
+        
+        # Update the image selection handler
+        def on_select(evt: gr.SelectData, selected_indices):
+            """Handle image selection in gallery"""
+            if selected_indices is None:
+                selected_indices = []
+            
+            if evt.index in selected_indices:
+                selected_indices.remove(evt.index)
+            else:
+                selected_indices.append(evt.index)
+            return selected_indices
+
+        # Connect gallery upload
+        gallery.upload(
+            fn=update_gallery_state,
+            inputs=[gallery, images_state],
+            outputs=[images_state, gallery, preview_gallery],
+            show_progress="full"
+        ).then(
+            fn=update_height_width,
+            inputs=[images_state],
+            outputs=[height, width]
+        ).then(
+            fn=update_denoise_checkboxes,
+            inputs=[images_state, task_type, azimuth, elevation, distance],
+            outputs=[denoise_mask_checkbox]
+        )
+
+        # Update delete buttons connections
+        delete_button.click(
+            fn=delete_selected_images,
+            inputs=[selected_indices_state, images_state, gallery],
+            outputs=[images_state, gallery, preview_gallery, selected_indices_state]
+        ).then(
+            fn=update_height_width,
+            inputs=[images_state],
+            outputs=[height, width]
+        ).then(
+            fn=update_denoise_checkboxes,
+            inputs=[images_state, task_type, azimuth, elevation, distance],
+            outputs=[denoise_mask_checkbox]
+        )
+
+        delete_all_button.click(
+            fn=delete_all_images,
+            inputs=[],
+            outputs=[images_state, gallery, preview_gallery, selected_indices_state]
+        ).then(
+            fn=update_denoise_checkboxes,
+            inputs=[images_state, task_type, azimuth, elevation, distance],
+            outputs=[denoise_mask_checkbox]
+        ).then(
+            fn=update_height_width,
+            inputs=[images_state],
+            outputs=[height, width]
+        )
+
+
+        task_type.change(
+            fn=update_denoise_checkboxes,
+            inputs=[images_state, task_type, azimuth, elevation, distance],
+            outputs=[denoise_mask_checkbox]
+        )
+
+        azimuth.change(
+            fn=update_denoise_checkboxes,
+            inputs=[images_state, task_type, azimuth, elevation, distance],
+            outputs=[denoise_mask_checkbox]
+        )
+
+        elevation.change(
+            fn=update_denoise_checkboxes,
+            inputs=[images_state, task_type, azimuth, elevation, distance],
+            outputs=[denoise_mask_checkbox]
+        )
+
+        distance.change(
+            fn=update_denoise_checkboxes,
+            inputs=[images_state, task_type, azimuth, elevation, distance],
+            outputs=[denoise_mask_checkbox]
+        )
+
+        generate_btn.click(
+            fn=generate_image,
+            inputs=[
+                images_state, prompt, negative_prompt, num_steps, guidance_scale,
+                denoise_mask_checkbox, task_type, azimuth, elevation, distance,
+                focal_length, height, width, scale_factor, scale_watershed, noise_scale  # Added noise_scale here
+            ],
+            outputs=[output_images, status],
+            concurrency_id="gpu_queue"
+        )
+
+        auto_caption_btn.click(
+            fn=update_prompt,
+            inputs=[images_state, task_type, captioning_message],
+            outputs=[prompt, caption_status],
+            concurrency_id="gpu_queue"
+        )
+        
+        # apply_mask_btn.click(
+        #     fn=apply_mask,
+        #     inputs=[images_state],
+        #     outputs=[output_images, status]
+        # )
+        
+        # Update the Examples component with preview column
+        examples = gr.Examples(
+            examples=get_example(),
+            fn=run_for_examples,
+            inputs=[
+                gr.Textbox(visible=False),  # Example name column
+                gr.Image(show_label=False, visible=False),  # Preview column
+                gallery,
+                prompt,
+                negative_prompt,
+                num_steps,
+                guidance_scale,
+                denoise_mask_checkbox,
+                task_type,
+                azimuth,
+                elevation,
+                distance,
+                focal_length,
+                height,
+                width,
+                scale_factor,
+                scale_watershed,
+                noise_scale
+            ],
+            outputs=[
+                output_images, 
+                status, 
+                gallery,
+                images_state,
+                preview_gallery
+            ],
+            cache_examples=True,
+            label="Examples"
+        )
+        
+        # the default load_from_cache function throws error for text-to-image and text-to-multiview because the list of input views is empty 
+        def custom_load_from_cache(self, example_id: int) -> List[Any]:
+            """Loads a particular cached example for the interface.
+            Parameters:
+                example_id: The id of the example to process (zero-indexed).
+            """
+            with open(self.cached_file, encoding="utf-8") as cache:
+                examples = list(csv.reader(cache))
+            example = examples[example_id + 1]  # +1 to adjust for header
+            output = []
+            if self.outputs is None:
+                raise ValueError("self.outputs is missing")
+            for component, value in zip(self.outputs, example):
+                value_to_use = value
+                try:
+                    value_as_dict = ast.literal_eval(value)
+                    # File components that output multiple files get saved as a python list
+                    # need to pass the parsed list to serialize
+                    # TODO: Better file serialization in 4.0
+                    if isinstance(value_as_dict, list) and isinstance(
+                        component, components.File
+                    ):
+                        tmp = value_as_dict
+                    if not utils.is_prop_update(tmp):
+                        raise TypeError("value wasn't an update")  # caught below
+                    value_to_use = tmp
+                    output.append(value_to_use)
+                except (ValueError, TypeError, SyntaxError):
+                    output.append(component.read_from_flag(value_to_use))
+            return output
+                        
+        def apply_custom_load_from_cache(examples_instance):
+            """
+            Applies the custom load_from_cache method to a Gradio Examples instance.
+            
+            Parameters:
+                examples_instance: The Gradio Examples instance to modify
+            """
+            examples_instance.load_from_cache = MethodType(custom_load_from_cache, examples_instance)
+            
+        apply_custom_load_from_cache(examples)
+
+        # Connect the event handler for file upload changes
+        gallery.change(
+            fn=update_gallery_state,
+            inputs=[gallery, images_state],
+            outputs=[images_state, gallery, preview_gallery],
+            show_progress="full"
+        ).then(
+            fn=update_height_width,
+            inputs=[images_state],
+            outputs=[height, width]
+        ).then(
+            fn=update_denoise_checkboxes,
+            inputs=[images_state, task_type, azimuth, elevation, distance],
+            outputs=[denoise_mask_checkbox]
+        )
+
+    demo.launch()
