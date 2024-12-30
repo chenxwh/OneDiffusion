@@ -1,0 +1,46 @@
+# Configuration for Cog ⚙️
+# Reference: https://cog.run/yaml
+
+build:
+  # set to true if your model requires a GPU
+  gpu: true
+
+  # a list of ubuntu apt packages to install
+  system_packages:
+    - "libgl1-mesa-glx"
+    - "libglib2.0-0"
+
+  # python version in the form '3.11' or '3.11.4'
+  python_version: "3.11"
+
+  # a list of packages in the format <package-name>==<version>
+  python_packages:
+    - "scikit-learn"
+    - "scipy"
+    - "einops"
+    - "einsum"
+    - "fvcore"
+    - "h5py"
+    - "twine"
+    - "sentencepiece"
+    - "protobuf==3.19.6"
+    - "transformers==4.45.2"
+    - "huggingface_hub==0.24"
+    - "accelerate==0.34.2"
+    - "diffusers==0.30.3"
+    - "pillow==10.2.0"
+    - "torch==2.3.1"
+    - "torchvision==0.18.1"
+    - "torchaudio==2.3.1"
+    - "jaxtyping"
+    - "mediapipe"
+    - "opencv-python==4.5.5.64"
+    - "opencv-python-headless==4.5.5.64"
+    - "bitsandbytes==0.45.0"
+    - ipython
+
+  run:
+    - git clone https://github.com/facebookresearch/pytorch3d.git && cd pytorch3d && pip install -e .
+    - pip install -U flash-attn --no-build-isolation
+    - curl -o /usr/local/bin/pget -L "https://github.com/replicate/pget/releases/download/v0.6.0/pget_linux_x86_64" && chmod +x /usr/local/bin/pget
+predict: "predict.py:Predictor"

@@ -12,7 +12,10 @@
     </a>
     <a href="https://huggingface.co/lehduong/OneDiffusion">
         <img alt="Build" src="https://img.shields.io/badge/HF%20Model-🤗-yellow">
-    </a>    
+    </a>  
+    <a href="https://replicate.com/chenxwh/onediffusion">
+        <img alt="Build" src="https://replicate.com/chenxwh/onediffusion/badge">
+    </a>  
 </p>
 
 <h4 align="left">
